@@ -96,11 +96,11 @@ class ContractWordGenerator
         $fTitle         = ['name' => 'Arial', 'size' => 15.5, 'bold' => true, 'rtl' => true, 'underline' => 'single'];
         $fHeading       = ['name' => 'Arial', 'size' => 12.5, 'bold' => true, 'rtl' => true, 'underline' => 'single'];
         $fBoldUnderline = ['name' => 'Arial', 'size' => 11.5, 'bold' => true, 'rtl' => true, 'underline' => 'single'];
-        $fCenterBold    = ['name' => 'Arial', 'size' => 12,   'bold' => true, 'rtl' => true];
-        $fFooterEn      = ['name' => 'Arial', 'size' => 8,    'rtl' => false, 'color' => '800000'];
-        $fFooterAr      = ['name' => 'Arial', 'size' => 8,    'rtl' => true,  'color' => '800000'];
+        $fCenterBold    = ['name' => 'Arial', 'size' => 12,   'bold' => true, 'color' => 'C00000', 'rtl' => true];
+        $fFooterEn      = ['name' => 'Arial', 'size' => 8,    'rtl' => false, 'color' => 'C00000'];
+        $fFooterAr      = ['name' => 'Arial', 'size' => 8,    'rtl' => true,  'color' => 'C00000'];
         $fFooterCr      = ['name' => 'Arial', 'size' => 7.5,  'rtl' => false, 'color' => '555555'];
-        $fSmall         = ['name' => 'Arial', 'size' => 8,    'rtl' => false, 'color' => '800000'];
+        $fSmall         = ['name' => 'Arial', 'size' => 8,    'rtl' => false, 'color' => 'C00000'];
 
         // ─── Table Styles (9638 twips = printable width of A4 portrait) ────────
         $phpWord->addTableStyle('NoBorderTable', [
@@ -129,10 +129,10 @@ class ContractWordGenerator
             ]);
         }
 
-        // Cell 2 (Right): Order No & Date in clean Black Bold
+        // Cell 2 (Right): Order No & Date in #C00000 Bold
         $hRight = $hTable->addCell(4819);
-        $hRight->addText("رقم الطلب {$contractNo}", ['name' => 'Arial', 'size' => 11, 'bold' => true, 'rtl' => true], $rtlRight);
-        $hRight->addText("التاريخ {$contractDate}", ['name' => 'Arial', 'size' => 10, 'bold' => true, 'rtl' => true], $rtlRight);
+        $hRight->addText("رقم الطلب {$contractNo}", ['name' => 'Arial', 'size' => 11, 'bold' => true, 'color' => 'C00000', 'rtl' => true], $rtlRight);
+        $hRight->addText("التاريخ {$contractDate}", ['name' => 'Arial', 'size' => 10, 'bold' => true, 'color' => 'C00000', 'rtl' => true], $rtlRight);
 
         // ─── FOOTER (On Every Page) ───────────────────────────────────────────
         $footer = $section->addFooter();
@@ -142,7 +142,7 @@ class ContractWordGenerator
         // Cell 1 (Left): Contact details & address
         $fLeft = $fTable->addCell(4819);
         $fLeft->addText('36698895 | infogisguif@gmail.com | gis.Bahrain', $fSmall, $ltrLeft);
-        $fLeft->addText('Seef District - Kingdom of Bahrain', ['name' => 'Arial', 'size' => 7.5, 'color' => '800000', 'rtl' => false], $ltrLeft);
+        $fLeft->addText('Seef District - Kingdom of Bahrain', ['name' => 'Arial', 'size' => 7.5, 'color' => 'C00000', 'rtl' => false], $ltrLeft);
 
         // Cell 2 (Right): Stamp image right above company text
         $fRight = $fTable->addCell(4819);
@@ -347,8 +347,7 @@ class ContractWordGenerator
         $sig2 = $sigTable->addCell(4819);
         $sig2->addText('الطرف الثاني', $fBold, $pCenter);
         $sig2->addText($clientName, $fBold, $pCenter);
-        $sig2->addTextBreak(2);
-        $sig2->addText('__________________________', $fNormal, $pCenter);
+        $sig2->addTextBreak(3);
         $sig2->addText('التوقيع', $fNormal, $pCenter);
 
         // Cell 2 (Right): Party 1 (Company)

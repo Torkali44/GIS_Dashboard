@@ -145,7 +145,7 @@ class ContractPdfGenerator
         $html1 = <<<HTML
 <div dir="rtl" style="font-family:arialbd; font-size:11.5pt; text-align:right; line-height:1.58; color:#000000;">
 
-<p style="text-align:center; font-size:12pt; font-weight:bold; margin-bottom:4px;">رقم الطلب {$contractNo}</p>
+<p style="text-align:center; font-size:12pt; font-weight:bold; color:#C00000; margin-bottom:4px;">رقم الطلب {$contractNo}</p>
 
 <h2 style="text-align:center; font-size:15.5pt; font-weight:bold; text-decoration:underline; color:#000; margin-top:2px; margin-bottom:8px;">عقد فحص المبنى</h2>
 
@@ -332,13 +332,8 @@ HTML;
         $pdf->Cell($colW, 6, $clientName, 0, 0, 'C');
         $pdf->Cell($colW, 6, 'جي أي إس للتقييم والتثمين العقاري', 0, 1, 'C');
 
-        // Party 2 (Client): Signature Line
-        $sigY = $pdf->GetY() + 14;
-        $pdf->SetDrawColor(0, 0, 0);
-        $pdf->SetLineWidth(0.35);
-        $pdf->Line(14 + 10, $sigY, 14 + $colW - 10, $sigY);
-
         // Party 1 (Company): Stamp & Signature without any intersecting line
+        $sigY = $pdf->GetY() + 14;
         $signPath = public_path('images/GIS SIGN.png');
         if (is_file($signPath)) {
             try {
@@ -429,12 +424,12 @@ class ContractTCPDF extends TCPDF
             } catch (Throwable $e) {}
         }
 
-        // Contract number + date on the right in black
-        $this->SetFont($this->reportFont, '', 10);
-        $this->SetTextColor(0, 0, 0);
+        // Contract number + date on the right in #C00000
+        $this->SetFont($this->reportFont, 'B', 10);
+        $this->SetTextColor(192, 0, 0);
         $this->SetXY(135, 11);
         $this->Cell(60, 5, 'رقم الطلب ' . $this->contractNo, 0, 0, 'R');
-        $this->SetFont($this->reportFont, '', 9);
+        $this->SetFont($this->reportFont, 'B', 9);
         $this->SetXY(135, 17);
         $this->Cell(60, 5, 'التاريخ ' . $this->contractDate, 0, 0, 'R');
 
@@ -448,7 +443,7 @@ class ContractTCPDF extends TCPDF
         $pageH = $this->getPageHeight();
 
         $this->setRTL(false);
-        $maroon = [128, 0, 0];
+        $maroon = [192, 0, 0];
         $rowY = $pageH - 17;
         $iconSize = 3.4;
         $iconY = $rowY + 0.55;
