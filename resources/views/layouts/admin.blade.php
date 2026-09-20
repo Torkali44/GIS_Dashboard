@@ -57,9 +57,21 @@
 
         .financial-metrics-grid {
             display: grid !important;
-            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
             gap: 1rem !important;
             width: 100% !important;
+        }
+
+        @media (min-width: 640px) {
+            .financial-metrics-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .financial-metrics-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            }
         }
 
         .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)) !important; }

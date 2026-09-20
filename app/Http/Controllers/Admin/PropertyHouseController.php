@@ -10,8 +10,10 @@ use App\Services\ContractWordGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 
 class PropertyHouseController extends Controller
 {
@@ -24,20 +26,22 @@ class PropertyHouseController extends Controller
         $yearFilter = $request->query('year');
 
         $query = PropertyHouse::query()
-            ->with(['payments', 'expenses'])
+            ->withSum('payments', 'amount')
+            ->withSum('expenses', 'amount')
             ->when($search, function ($q) use ($search) {
-                $q->where(function ($sub) use ($search) {
-                    $sub->where('title', 'like', "%{$search}%")
-                        ->orWhere('client_name', 'like', "%{$search}%")
-                        ->orWhere('buyer_name', 'like', "%{$search}%")
-                        ->orWhere('phone', 'like', "%{$search}%")
-                        ->orWhere('address', 'like', "%{$search}%")
-                        ->orWhere('contract_number', 'like', "%{$search}%")
-                        ->orWhere('reference_code', 'like', "%{$search}%")
-                        ->orWhere('villa_number', 'like', "%{$search}%")
-                        ->orWhere('compound', 'like', "%{$search}%")
-                        ->orWhere('area', 'like', "%{$search}%")
-                        ->orWhere('document_number', 'like', "%{$search}%");
+                $term = '%'.addcslashes((string) $search, '%_\\').'%';
+                $q->where(function ($sub) use ($term) {
+                    $sub->where('title', 'like', $term)
+                        ->orWhere('client_name', 'like', $term)
+                        ->orWhere('buyer_name', 'like', $term)
+                        ->orWhere('phone', 'like', $term)
+                        ->orWhere('address', 'like', $term)
+                        ->orWhere('contract_number', 'like', $term)
+                        ->orWhere('reference_code', 'like', $term)
+                        ->orWhere('villa_number', 'like', $term)
+                        ->orWhere('compound', 'like', $term)
+                        ->orWhere('area', 'like', $term)
+                        ->orWhere('document_number', 'like', $term);
                 });
             })
             ->when($statusFilter, fn ($q) => $q->where('contract_status', $statusFilter))
@@ -85,7 +89,7 @@ class PropertyHouseController extends Controller
         return view('admin.houses.create');
     }
 
-    private function validationRules(): array
+    private function validationRules(?PropertyHouse $house = null): array
     {
         return [
             'title' => ['required', 'string', 'max:255'],
@@ -108,8 +112,13 @@ class PropertyHouseController extends Controller
             'buyer_name' => ['nullable', 'string', 'max:255'],
             'nationality' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
-            'client_email' => ['nullable', 'string', 'max:255'],
-            'contract_number' => ['nullable', 'string', 'max:120'],
+            'client_email' => ['nullable', 'email', 'max:255'],
+            'contract_number' => [
+                'nullable',
+                'string',
+                'max:120',
+                Rule::unique('property_houses', 'contract_number')->ignore($house?->id),
+            ],
             'payment_method' => ['nullable', 'string', 'in:cash,benefit,bank_transfer,other'],
             'id_number' => ['nullable', 'string', 'max:255'],
             'developer_name' => ['nullable', 'string', 'max:255'],
@@ -139,6 +148,8 @@ class PropertyHouseController extends Controller
             'contract_date.date' => 'صيغة تاريخ العقد غير صحيحة.',
             'contract_status.in' => 'حالة العقد المختارة غير صالحة.',
             'payment_method.in' => 'طريقة الدفع المختارة غير صالحة.',
+            'client_email.email' => 'صيغة البريد الإلكتروني غير صحيحة.',
+            'contract_number.unique' => 'رقم العقد مستخدم مسبقاً.',
         ];
     }
 
@@ -146,14 +157,17 @@ class PropertyHouseController extends Controller
     {
         $data = $request->validate($this->validationRules(), $this->validationMessages());
 
-        $house = PropertyHouse::create([
-            ...$data,
-            'user_id' => $request->user()->id,
-        ]);
+        $house = DB::transaction(function () use ($data, $request) {
+            $house = new PropertyHouse($data);
+            $house->user_id = $request->user()->id;
+            $house->save();
+
+            return $house;
+        });
 
         return redirect()
             ->route('admin.houses.show', $house)
-            ->with('status', 'تم إنشاء العقد بنجاح — رقم العقد: ' . $house->contract_number);
+            ->with('status', 'تم إنشاء العقد بنجاح — رقم العقد: '.$house->contract_number);
     }
 
     public function edit(PropertyHouse $house): View
@@ -163,7 +177,7 @@ class PropertyHouseController extends Controller
 
     public function update(Request $request, PropertyHouse $house): RedirectResponse
     {
-        $data = $request->validate($this->validationRules(), $this->validationMessages());
+        $data = $request->validate($this->validationRules($house), $this->validationMessages());
 
         $house->update($data);
 
@@ -176,12 +190,12 @@ class PropertyHouseController extends Controller
     {
         $house->load(['payments', 'expenses']);
 
-        $reportNo = $house->contract_number ?: $house->reference_code ?: ('H-' . $house->id);
+        $reportNo = $house->contract_number ?: $house->reference_code ?: ('H-'.$house->id);
         $clientName = trim((string) ($house->buyer_name ?? $house->client_name ?? '')) ?: '---';
         $propertyAddress = collect([
-            $house->villa_number ? 'فيلا ' . $house->villa_number : null,
-            $house->road ? 'طريق ' . $house->road : null,
-            $house->compound ? 'مجمع ' . $house->compound : null,
+            $house->villa_number ? 'فيلا '.$house->villa_number : null,
+            $house->road ? 'طريق '.$house->road : null,
+            $house->compound ? 'مجمع '.$house->compound : null,
             $house->area ?: null,
         ])->filter()->implode('  ') ?: ($house->address ?: $house->title);
 
@@ -210,12 +224,12 @@ class PropertyHouseController extends Controller
         $house->load(['payments', 'expenses']);
         $pdf = (new ContractPdfGenerator())->renderBinary($house);
 
-        $filename = 'contract-' . ($house->contract_number ?? $house->id) . '.pdf';
+        $filename = $house->downloadBasename().'.pdf';
 
         return response($pdf, 200, [
-            'Content-Type'        => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-            'Content-Length'      => strlen($pdf),
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, $filename),
+            'Content-Length' => strlen($pdf),
         ]);
     }
 
@@ -225,13 +239,12 @@ class PropertyHouseController extends Controller
 
         $docx = (new ContractWordGenerator())->renderBinary($house);
 
-        $filename = 'contract-' . ($house->contract_number ?? $house->id) . '.docx';
+        $filename = $house->downloadBasename().'.docx';
 
         return response($docx, 200, [
-            'Content-Type'        => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-            'Content-Length'      => strlen($docx),
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Content-Disposition' => HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, $filename),
+            'Content-Length' => strlen($docx),
         ]);
     }
-
 }

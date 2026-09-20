@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class PropertyHouse extends Model
 {
@@ -86,18 +86,34 @@ class PropertyHouse extends Model
 
     public static function generateContractNumber(): string
     {
-        $year = now()->format('Y');
-        $lastHouse = self::where('contract_number', 'like', "GIS-{$year}-%")
-            ->orderByDesc('id')
-            ->first();
+        $next = function (): string {
+            $year = now()->format('Y');
+            $lastHouse = self::query()
+                ->where('contract_number', 'like', "GIS-{$year}-%")
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
 
-        if ($lastHouse && preg_match('/GIS-\d{4}-(\d+)/', $lastHouse->contract_number, $m)) {
-            $next = ((int) $m[1]) + 1;
-        } else {
-            $next = 1;
-        }
+            if ($lastHouse && preg_match('/GIS-\d{4}-(\d+)/', $lastHouse->contract_number, $m)) {
+                $seq = ((int) $m[1]) + 1;
+            } else {
+                $seq = 1;
+            }
 
-        return sprintf('GIS-%s-%04d', $year, $next);
+            return sprintf('GIS-%s-%04d', $year, $seq);
+        };
+
+        return DB::transactionLevel() > 0
+            ? $next()
+            : DB::transaction($next);
+    }
+
+    public function downloadBasename(): string
+    {
+        $base = (string) ($this->contract_number ?: $this->id);
+        $safe = preg_replace('/[^A-Za-z0-9._-]+/', '-', $base) ?: (string) $this->id;
+
+        return 'contract-' . trim($safe, '-');
     }
 
     /* ─── Dates ─── */
@@ -135,6 +151,14 @@ class PropertyHouse extends Model
 
     public function getTotalPaidAttribute(): float
     {
+        if (array_key_exists('payments_sum', $this->attributes)) {
+            return (float) ($this->attributes['payments_sum'] ?? 0);
+        }
+
+        if ($this->relationLoaded('payments')) {
+            return (float) $this->payments->sum('amount');
+        }
+
         return (float) $this->payments()->sum('amount');
     }
 
@@ -145,6 +169,14 @@ class PropertyHouse extends Model
 
     public function getTotalExpensesAttribute(): float
     {
+        if (array_key_exists('expenses_sum', $this->attributes)) {
+            return (float) ($this->attributes['expenses_sum'] ?? 0);
+        }
+
+        if ($this->relationLoaded('expenses')) {
+            return (float) $this->expenses->sum('amount');
+        }
+
         return (float) $this->expenses()->sum('amount');
     }
 

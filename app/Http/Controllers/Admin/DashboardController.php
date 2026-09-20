@@ -6,72 +6,36 @@ use App\Http\Controllers\Controller;
 use App\Models\ContractExpense;
 use App\Models\ContractPayment;
 use App\Models\PropertyHouse;
+use App\Services\ReportExcelGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request): View
+    public function index(): View
     {
-        // Overview stats
         $totalContracts = PropertyHouse::count();
         $totalContractsThisMonth = PropertyHouse::whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)
             ->count();
-        $totalContractValue = PropertyHouse::sum('price');
-        $totalCollected = ContractPayment::sum('amount');
+        $totalContractValue = (float) PropertyHouse::sum('price');
+        $totalCollected = (float) ContractPayment::sum('amount');
         $totalRemaining = $totalContractValue - $totalCollected;
-        $totalExpenses = ContractExpense::sum('amount');
+        $totalExpenses = (float) ContractExpense::sum('amount');
         $totalNetProfit = $totalContractValue - $totalExpenses;
         $avgProfitPerContract = $totalContracts > 0 ? $totalNetProfit / $totalContracts : 0;
 
-        // Recent contracts
-        $recentContracts = PropertyHouse::latest()->take(5)->get();
+        $recentContracts = PropertyHouse::query()
+            ->latest()
+            ->withSum('payments', 'amount')
+            ->take(5)
+            ->get();
 
-        // Monthly chart data (last 12 months)
-        $monthlyData = [];
-        for ($i = 11; $i >= 0; $i--) {
-            $date = now()->subMonths($i);
-            $month = $date->format('Y-m');
-            $monthLabel = $date->translatedFormat('M Y');
+        $monthlyData = $this->lastTwelveMonthsChart();
+        [$paidCount, $partialCount, $unpaidCount] = $this->paymentStatusCounts();
 
-            $monthContracts = PropertyHouse::whereYear('created_at', $date->year)
-                ->whereMonth('created_at', $date->month)
-                ->sum('price');
-
-            $monthPayments = ContractPayment::whereYear('payment_date', $date->year)
-                ->whereMonth('payment_date', $date->month)
-                ->sum('amount');
-
-            $monthExpenses = ContractExpense::whereYear('expense_date', $date->year)
-                ->whereMonth('expense_date', $date->month)
-                ->sum('amount');
-
-            $monthlyData[] = [
-                'month' => $monthLabel,
-                'contracts' => (float) $monthContracts,
-                'payments' => (float) $monthPayments,
-                'expenses' => (float) $monthExpenses,
-                'profit' => (float) ($monthContracts - $monthExpenses),
-            ];
-        }
-
-        // Payment status breakdown
-        $paidCount = 0;
-        $partialCount = 0;
-        $unpaidCount = 0;
-        PropertyHouse::whereNotNull('price')->where('price', '>', 0)->chunk(100, function ($houses) use (&$paidCount, &$partialCount, &$unpaidCount) {
-            foreach ($houses as $house) {
-                match ($house->payment_status) {
-                    'paid' => $paidCount++,
-                    'partial' => $partialCount++,
-                    default => $unpaidCount++,
-                };
-            }
-        });
-
-        // Contract status breakdown
         $activeContracts = PropertyHouse::where('contract_status', 'active')->count();
         $completedContracts = PropertyHouse::where('contract_status', 'completed')->count();
 
@@ -94,24 +58,26 @@ class DashboardController extends Controller
         ));
     }
 
-    /**
-     * Monthly report page with month/year selection.
-     */
     public function monthlyReport(Request $request): View
     {
-        $month = (int) $request->query('month', now()->month);
-        $year = (int) $request->query('year', now()->year);
+        [$month, $year] = ReportExcelGenerator::normalizeMonthYear(
+            $request->query('month'),
+            $request->query('year'),
+        );
 
-        $contracts = PropertyHouse::whereYear('created_at', $year)
+        $contracts = PropertyHouse::query()
+            ->whereYear('created_at', $year)
             ->whereMonth('created_at', $month)
+            ->withSum('payments', 'amount')
+            ->withSum('expenses', 'amount')
             ->latest()
             ->get();
 
-        $totalValue = $contracts->sum('price');
+        $totalValue = (float) $contracts->sum('price');
         $contractIds = $contracts->pluck('id');
 
-        $totalCollected = ContractPayment::whereIn('property_house_id', $contractIds)->sum('amount');
-        $totalExpenses = ContractExpense::whereIn('property_house_id', $contractIds)->sum('amount');
+        $totalCollected = (float) ContractPayment::whereIn('property_house_id', $contractIds)->sum('amount');
+        $totalExpenses = (float) ContractExpense::whereIn('property_house_id', $contractIds)->sum('amount');
         $totalRemaining = $totalValue - $totalCollected;
         $totalProfit = $totalValue - $totalExpenses;
         $avgValue = $contracts->count() > 0 ? $totalValue / $contracts->count() : 0;
@@ -133,59 +99,20 @@ class DashboardController extends Controller
         ));
     }
 
-    /**
-     * Export Monthly Report to Excel (.xlsx)
-     */
-    public function exportMonthlyExcel(Request $request, \App\Services\ReportExcelGenerator $generator): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function exportMonthlyExcel(Request $request, ReportExcelGenerator $generator): StreamedResponse
     {
-        $month = (int) $request->query('month', now()->month);
-        $year = (int) $request->query('year', now()->year);
+        [$month, $year] = ReportExcelGenerator::normalizeMonthYear(
+            $request->query('month'),
+            $request->query('year'),
+        );
 
         return $generator->downloadMonthly($year, $month);
     }
 
-    /**
-     * Annual report page with month-by-month comparison.
-     */
-    public function annualReport(Request $request): View
+    public function annualReport(Request $request, ReportExcelGenerator $generator): View
     {
-        $year = (int) $request->query('year', now()->year);
-
-        $monthlyBreakdown = [];
-        for ($m = 1; $m <= 12; $m++) {
-            $contractIds = PropertyHouse::whereYear('created_at', $year)
-                ->whereMonth('created_at', $m)
-                ->pluck('id');
-
-            $contractsCount = $contractIds->count();
-            $revenue = PropertyHouse::whereIn('id', $contractIds)->sum('price');
-            $collected = ContractPayment::whereIn('property_house_id', $contractIds)->sum('amount');
-            $expenses = ContractExpense::whereIn('property_house_id', $contractIds)->sum('amount');
-            $remaining = $revenue - $collected;
-            $profit = $revenue - $expenses;
-            $collectionRate = $revenue > 0 ? ($collected / $revenue) * 100 : 0;
-
-            $monthlyBreakdown[] = [
-                'month' => $m,
-                'month_name' => \Carbon\Carbon::create($year, $m)->translatedFormat('F'),
-                'contracts_count' => $contractsCount,
-                'revenue' => (float) $revenue,
-                'collected' => (float) $collected,
-                'remaining' => (float) $remaining,
-                'expenses' => (float) $expenses,
-                'profit' => (float) $profit,
-                'collection_rate' => $collectionRate,
-            ];
-        }
-
-        $totals = [
-            'contracts' => array_sum(array_column($monthlyBreakdown, 'contracts_count')),
-            'revenue' => array_sum(array_column($monthlyBreakdown, 'revenue')),
-            'collected' => array_sum(array_column($monthlyBreakdown, 'collected')),
-            'remaining' => array_sum(array_column($monthlyBreakdown, 'remaining')),
-            'expenses' => array_sum(array_column($monthlyBreakdown, 'expenses')),
-            'profit' => array_sum(array_column($monthlyBreakdown, 'profit')),
-        ];
+        $year = ReportExcelGenerator::normalizeYear($request->query('year'));
+        ['monthly' => $monthlyBreakdown, 'totals' => $totals] = $generator->annualBreakdown($year);
 
         $annualCollectionRate = $totals['revenue'] > 0 ? ($totals['collected'] / $totals['revenue']) * 100 : 0;
         $profitMargin = $totals['revenue'] > 0 ? ($totals['profit'] / $totals['revenue']) * 100 : 0;
@@ -199,13 +126,101 @@ class DashboardController extends Controller
         ));
     }
 
-    /**
-     * Export Annual Report to Excel (.xlsx)
-     */
-    public function exportAnnualExcel(Request $request, \App\Services\ReportExcelGenerator $generator): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function exportAnnualExcel(Request $request, ReportExcelGenerator $generator): StreamedResponse
     {
-        $year = (int) $request->query('year', now()->year);
+        $year = ReportExcelGenerator::normalizeYear($request->query('year'));
 
         return $generator->downloadAnnual($year);
+    }
+
+    /**
+     * @return list<array{month: string, contracts: float, payments: float, expenses: float, profit: float}>
+     */
+    private function lastTwelveMonthsChart(): array
+    {
+        $from = now()->copy()->startOfMonth()->subMonths(11);
+
+        $contractYm = $this->yearMonthExpression('created_at');
+        $paymentYm = $this->yearMonthExpression('payment_date');
+        $expenseYm = $this->yearMonthExpression('expense_date');
+
+        $contractsByMonth = PropertyHouse::query()
+            ->where('created_at', '>=', $from)
+            ->selectRaw("{$contractYm} as ym, COALESCE(SUM(price), 0) as total")
+            ->groupByRaw($contractYm)
+            ->pluck('total', 'ym');
+
+        $paymentsByMonth = ContractPayment::query()
+            ->where('payment_date', '>=', $from->toDateString())
+            ->selectRaw("{$paymentYm} as ym, COALESCE(SUM(amount), 0) as total")
+            ->groupByRaw($paymentYm)
+            ->pluck('total', 'ym');
+
+        $expensesByMonth = ContractExpense::query()
+            ->where('expense_date', '>=', $from->toDateString())
+            ->selectRaw("{$expenseYm} as ym, COALESCE(SUM(amount), 0) as total")
+            ->groupByRaw($expenseYm)
+            ->pluck('total', 'ym');
+
+        $monthlyData = [];
+        for ($i = 11; $i >= 0; $i--) {
+            $date = now()->subMonths($i);
+            $key = $date->format('Y-m');
+            $contracts = (float) ($contractsByMonth[$key] ?? 0);
+            $payments = (float) ($paymentsByMonth[$key] ?? 0);
+            $expenses = (float) ($expensesByMonth[$key] ?? 0);
+
+            $monthlyData[] = [
+                'month' => $date->translatedFormat('M Y'),
+                'contracts' => $contracts,
+                'payments' => $payments,
+                'expenses' => $expenses,
+                'profit' => $contracts - $expenses,
+            ];
+        }
+
+        return $monthlyData;
+    }
+
+    /**
+     * @return array{0: int, 1: int, 2: int}
+     */
+    private function paymentStatusCounts(): array
+    {
+        $paidSub = ContractPayment::query()
+            ->selectRaw('property_house_id, SUM(amount) as paid')
+            ->groupBy('property_house_id');
+
+        $bucketSql = "CASE
+            WHEN COALESCE(p.paid, 0) <= 0 THEN 'unpaid'
+            WHEN COALESCE(p.paid, 0) >= property_houses.price THEN 'paid'
+            ELSE 'partial'
+        END";
+
+        $rows = PropertyHouse::query()
+            ->where('price', '>', 0)
+            ->leftJoinSub($paidSub, 'p', 'p.property_house_id', '=', 'property_houses.id')
+            ->selectRaw("{$bucketSql} as payment_bucket")
+            ->selectRaw('COUNT(*) as aggregate')
+            ->groupByRaw($bucketSql)
+            ->pluck('aggregate', 'payment_bucket');
+
+        return [
+            (int) ($rows['paid'] ?? 0),
+            (int) ($rows['partial'] ?? 0),
+            (int) ($rows['unpaid'] ?? 0),
+        ];
+    }
+
+    private function yearMonthExpression(string $column): string
+    {
+        $column = match ($column) {
+            'created_at', 'payment_date', 'expense_date' => $column,
+            default => throw new \InvalidArgumentException('Invalid date column.'),
+        };
+
+        return DB::connection()->getDriverName() === 'sqlite'
+            ? "strftime('%Y-%m', {$column})"
+            : "DATE_FORMAT({$column}, '%Y-%m')";
     }
 }

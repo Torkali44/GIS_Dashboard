@@ -368,16 +368,24 @@ class ContractWordGenerator
 
         // ─── SAVE & RETURN ────────────────────────────────────────────────────
         $writer = IOFactory::createWriter($phpWord, 'Word2007');
-        $tmpFile = tempnam(sys_get_temp_dir(), 'contract_') . '.docx';
-        $writer->save($tmpFile);
+        $tmpBase = tempnam(sys_get_temp_dir(), 'contract_');
+        if ($tmpBase === false) {
+            throw new \RuntimeException('Unable to create a temporary contract file.');
+        }
+        $tmpFile = $tmpBase.'.docx';
+        @unlink($tmpBase);
 
-        $binary = file_get_contents($tmpFile);
-        @unlink($tmpFile);
+        try {
+            $writer->save($tmpFile);
+            $binary = file_get_contents($tmpFile);
+            if ($binary === false) {
+                throw new \RuntimeException('Unable to read the generated contract file.');
+            }
 
-        // Force RTL on all sections
-        $binary = $this->forceSectionRtl($binary);
-
-        return $binary;
+            return $this->forceSectionRtl($binary);
+        } finally {
+            @unlink($tmpFile);
+        }
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -430,7 +438,12 @@ class ContractWordGenerator
      */
     private function forceSectionRtl(string $docxBinary): string
     {
-        $tmpZip = tempnam(sys_get_temp_dir(), 'rtl_fix_') . '.docx';
+        $tmpBase = tempnam(sys_get_temp_dir(), 'rtl_fix_');
+        if ($tmpBase === false) {
+            return $docxBinary;
+        }
+        $tmpZip = $tmpBase.'.docx';
+        @unlink($tmpBase);
         file_put_contents($tmpZip, $docxBinary);
 
         $zip = new \ZipArchive();

@@ -16,15 +16,19 @@ Route::middleware('guest')->group(function (): void {
 
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 
-Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function (): void {
+Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->scopeBindings()->group(function (): void {
     // Dashboard
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
     // Reports
     Route::get('reports/monthly', [DashboardController::class, 'monthlyReport'])->name('reports.monthly');
-    Route::get('reports/monthly/excel', [DashboardController::class, 'exportMonthlyExcel'])->name('reports.monthly.excel');
+    Route::get('reports/monthly/excel', [DashboardController::class, 'exportMonthlyExcel'])
+        ->middleware('throttle:20,1')
+        ->name('reports.monthly.excel');
     Route::get('reports/annual', [DashboardController::class, 'annualReport'])->name('reports.annual');
-    Route::get('reports/annual/excel', [DashboardController::class, 'exportAnnualExcel'])->name('reports.annual.excel');
+    Route::get('reports/annual/excel', [DashboardController::class, 'exportAnnualExcel'])
+        ->middleware('throttle:20,1')
+        ->name('reports.annual.excel');
 
     // Contracts (houses)
     Route::resource('houses', PropertyHouseController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);

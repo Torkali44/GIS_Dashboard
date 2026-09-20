@@ -15,15 +15,100 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportExcelGenerator
 {
+    public static function normalizeYear(mixed $year): int
+    {
+        $year = (int) ($year ?: now()->year);
+
+        return max(2000, min((int) now()->year + 1, $year));
+    }
+
+    /**
+     * @return array{0: int, 1: int}
+     */
+    public static function normalizeMonthYear(mixed $month, mixed $year): array
+    {
+        $month = (int) ($month ?: now()->month);
+        $year = self::normalizeYear($year);
+
+        return [max(1, min(12, $month)), $year];
+    }
+
+    /**
+     * @return array{monthly: list<array<string, mixed>>, totals: array<string, float|int>}
+     */
+    public function annualBreakdown(int $year): array
+    {
+        $houses = PropertyHouse::query()
+            ->whereYear('created_at', $year)
+            ->get(['id', 'created_at', 'price']);
+
+        $ids = $houses->pluck('id');
+
+        $paymentsByHouse = $ids->isEmpty()
+            ? collect()
+            : ContractPayment::query()
+                ->whereIn('property_house_id', $ids)
+                ->selectRaw('property_house_id, SUM(amount) as total')
+                ->groupBy('property_house_id')
+                ->pluck('total', 'property_house_id');
+
+        $expensesByHouse = $ids->isEmpty()
+            ? collect()
+            : ContractExpense::query()
+                ->whereIn('property_house_id', $ids)
+                ->selectRaw('property_house_id, SUM(amount) as total')
+                ->groupBy('property_house_id')
+                ->pluck('total', 'property_house_id');
+
+        $housesByMonth = $houses->groupBy(fn (PropertyHouse $house) => (int) $house->created_at->month);
+
+        $monthlyBreakdown = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $monthHouses = $housesByMonth->get($m, collect());
+            $revenue = (float) $monthHouses->sum('price');
+            $collected = (float) $monthHouses->sum(fn (PropertyHouse $house) => (float) ($paymentsByHouse[$house->id] ?? 0));
+            $expenses = (float) $monthHouses->sum(fn (PropertyHouse $house) => (float) ($expensesByHouse[$house->id] ?? 0));
+            $remaining = $revenue - $collected;
+            $profit = $revenue - $expenses;
+            $collectionRate = $revenue > 0 ? ($collected / $revenue) * 100 : 0;
+
+            $monthlyBreakdown[] = [
+                'month' => $m,
+                'month_name' => Carbon::create($year, $m)->translatedFormat('F'),
+                'contracts_count' => $monthHouses->count(),
+                'revenue' => $revenue,
+                'collected' => $collected,
+                'remaining' => $remaining,
+                'expenses' => $expenses,
+                'profit' => $profit,
+                'collection_rate' => $collectionRate,
+                'rate' => $collectionRate,
+            ];
+        }
+
+        $totals = [
+            'contracts' => array_sum(array_column($monthlyBreakdown, 'contracts_count')),
+            'revenue' => array_sum(array_column($monthlyBreakdown, 'revenue')),
+            'collected' => array_sum(array_column($monthlyBreakdown, 'collected')),
+            'remaining' => array_sum(array_column($monthlyBreakdown, 'remaining')),
+            'expenses' => array_sum(array_column($monthlyBreakdown, 'expenses')),
+            'profit' => array_sum(array_column($monthlyBreakdown, 'profit')),
+        ];
+
+        return ['monthly' => $monthlyBreakdown, 'totals' => $totals];
+    }
+
     /**
      * Generate and download Monthly Excel Report (.xlsx)
      */
     public function downloadMonthly(int $year, int $month): StreamedResponse
     {
+        [$month, $year] = self::normalizeMonthYear($month, $year);
         $monthName = Carbon::create($year, $month)->translatedFormat('F');
         $contracts = PropertyHouse::whereYear('created_at', $year)
             ->whereMonth('created_at', $month)
-            ->with(['payments', 'expenses'])
+            ->withSum('payments', 'amount')
+            ->withSum('expenses', 'amount')
             ->latest()
             ->get();
 
@@ -157,12 +242,20 @@ class ReportExcelGenerator
         // Summary Total Row
         $sheet->setCellValue("A{$row}", 'الإجمالي');
         $sheet->mergeCells("A{$row}:E{$row}");
-        $sheet->setCellValue("F{$row}", "=SUM(F8:F" . ($row - 1) . ")");
-        $sheet->setCellValue("G{$row}", "=SUM(G8:G" . ($row - 1) . ")");
-        $sheet->setCellValue("H{$row}", "=SUM(H8:H" . ($row - 1) . ")");
-        $sheet->setCellValue("I{$row}", "=SUM(I8:I" . ($row - 1) . ")");
-        $sheet->setCellValue("J{$row}", "=SUM(J8:J" . ($row - 1) . ")");
-        $sheet->setCellValue("K{$row}", "نسبة التحصيل: " . number_format($collectionRate, 1) . "%");
+        if ($contracts->isEmpty()) {
+            $sheet->setCellValue("F{$row}", 0);
+            $sheet->setCellValue("G{$row}", 0);
+            $sheet->setCellValue("H{$row}", 0);
+            $sheet->setCellValue("I{$row}", 0);
+            $sheet->setCellValue("J{$row}", 0);
+        } else {
+            $sheet->setCellValue("F{$row}", '=SUM(F8:F'.($row - 1).')');
+            $sheet->setCellValue("G{$row}", '=SUM(G8:G'.($row - 1).')');
+            $sheet->setCellValue("H{$row}", '=SUM(H8:H'.($row - 1).')');
+            $sheet->setCellValue("I{$row}", '=SUM(I8:I'.($row - 1).')');
+            $sheet->setCellValue("J{$row}", '=SUM(J8:J'.($row - 1).')');
+        }
+        $sheet->setCellValue("K{$row}", 'نسبة التحصيل: '.number_format($collectionRate, 1).'%');
 
         $sheet->getStyle("A{$row}:K{$row}")->applyFromArray([
             'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => '064E3B']],
@@ -198,41 +291,8 @@ class ReportExcelGenerator
      */
     public function downloadAnnual(int $year): StreamedResponse
     {
-        $monthlyBreakdown = [];
-        for ($m = 1; $m <= 12; $m++) {
-            $contractIds = PropertyHouse::whereYear('created_at', $year)
-                ->whereMonth('created_at', $m)
-                ->pluck('id');
-
-            $contractsCount = $contractIds->count();
-            $revenue = (float) PropertyHouse::whereIn('id', $contractIds)->sum('price');
-            $collected = (float) ContractPayment::whereIn('property_house_id', $contractIds)->sum('amount');
-            $expenses = (float) ContractExpense::whereIn('property_house_id', $contractIds)->sum('amount');
-            $remaining = $revenue - $collected;
-            $profit = $revenue - $expenses;
-            $rate = $revenue > 0 ? ($collected / $revenue) * 100 : 0;
-
-            $monthlyBreakdown[] = [
-                'month' => $m,
-                'month_name' => Carbon::create($year, $m)->translatedFormat('F'),
-                'contracts_count' => $contractsCount,
-                'revenue' => $revenue,
-                'collected' => $collected,
-                'remaining' => $remaining,
-                'expenses' => $expenses,
-                'profit' => $profit,
-                'rate' => $rate,
-            ];
-        }
-
-        $totals = [
-            'contracts' => array_sum(array_column($monthlyBreakdown, 'contracts_count')),
-            'revenue' => array_sum(array_column($monthlyBreakdown, 'revenue')),
-            'collected' => array_sum(array_column($monthlyBreakdown, 'collected')),
-            'remaining' => array_sum(array_column($monthlyBreakdown, 'remaining')),
-            'expenses' => array_sum(array_column($monthlyBreakdown, 'expenses')),
-            'profit' => array_sum(array_column($monthlyBreakdown, 'profit')),
-        ];
+        $year = self::normalizeYear($year);
+        ['monthly' => $monthlyBreakdown, 'totals' => $totals] = $this->annualBreakdown($year);
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();

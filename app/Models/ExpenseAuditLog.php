@@ -37,6 +37,13 @@ class ExpenseAuditLog extends Model
         return $this->belongsTo(User::class);
     }
 
+    protected static function booted(): void
+    {
+        static::creating(function (self $log): void {
+            $log->created_at ??= now();
+        });
+    }
+
     public function getActionLabelAttribute(): string
     {
         return match ($this->action) {

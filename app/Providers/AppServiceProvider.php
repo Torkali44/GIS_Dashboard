@@ -28,6 +28,10 @@ class AppServiceProvider extends ServiceProvider
         \Illuminate\Pagination\Paginator::useTailwind();
 
         $this->ensureStorageDirectories();
+
+        if (str_starts_with((string) config('app.url'), 'https://')) {
+            \Illuminate\Support\Facades\URL::forceScheme('https');
+        }
     }
 
     protected function ensureStorageDirectories(): void

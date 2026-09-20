@@ -145,7 +145,7 @@ class ContractFinancialValidationTest extends TestCase
     {
         $response = $this->actingAs($this->user)
             ->post(route('admin.houses.expenses.store', $this->house), [
-                'expense_type' => 'inspector_fee',
+                'expense_type' => 'salary',
                 'amount' => 30.00,
                 'expense_date' => '2026-09-18',
                 'payment_method' => 'benefit',
@@ -156,7 +156,7 @@ class ContractFinancialValidationTest extends TestCase
         $response->assertRedirect(route('admin.houses.show', $this->house));
         $this->assertDatabaseHas('contract_expenses', [
             'property_house_id' => $this->house->id,
-            'expense_type' => 'inspector_fee',
+            'expense_type' => 'salary',
             'amount' => 30.00,
             'payee_name' => 'المهندس الفاحص',
         ]);
@@ -192,7 +192,7 @@ class ContractFinancialValidationTest extends TestCase
         // Add expense 1: 30.00
         ContractExpense::create([
             'property_house_id' => $this->house->id,
-            'expense_type' => 'inspector_fee',
+            'expense_type' => 'salary',
             'amount' => 30.00,
             'expense_date' => '2026-09-12',
             'payment_method' => 'benefit',
@@ -201,7 +201,7 @@ class ContractFinancialValidationTest extends TestCase
         // Add expense 2: 20.00 (Total expenses = 50.00)
         ContractExpense::create([
             'property_house_id' => $this->house->id,
-            'expense_type' => 'fuel_transport',
+            'expense_type' => 'transport',
             'amount' => 20.00,
             'expense_date' => '2026-09-12',
             'payment_method' => 'cash',

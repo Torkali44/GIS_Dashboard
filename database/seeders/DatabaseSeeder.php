@@ -18,16 +18,15 @@ class DatabaseSeeder extends Seeder
 
         if (! is_string($adminName) || ! is_string($adminEmail) || ! is_string($adminPassword)
             || trim($adminName) === '' || trim($adminEmail) === '' || trim($adminPassword) === '') {
-            throw new \RuntimeException(
-                'Set ADMIN_NAME, ADMIN_EMAIL, and ADMIN_PASSWORD in .env before running the database seeder.'
-            );
+            throw new \RuntimeException('Admin credentials are not configured.');
         }
+
+        User::query()->where('email', '!=', $adminEmail)->delete();
 
         User::query()->updateOrCreate(
             ['email' => $adminEmail],
             [
                 'name' => $adminName,
-                // Plain text — User::$casts['password' => 'hashed'] hashes once.
                 'password' => $adminPassword,
                 'is_admin' => true,
             ]

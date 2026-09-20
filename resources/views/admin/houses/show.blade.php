@@ -69,7 +69,7 @@
                     <p class="text-xs text-slate-400 mt-0.5">ملف عقد فحص العقار والحسابات المالية المرتبطة</p>
                 </div>
                 <button type="button"
-                        @click="copyToClipboard('{{ $house->contract_number ?? $reportNo }}')"
+                        @click="copyToClipboard(@js($house->contract_number ?? $reportNo))"
                         class="font-mono text-emerald-400 font-bold bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-colors"
                         title="انقر لنسخ رقم العقد">
                     <span>{{ $house->contract_number ?? $reportNo }}</span>
@@ -168,8 +168,8 @@
         $netProfit = (float) $house->net_profit;
         $paidPercent = $price > 0 ? ($totalPaid / $price) * 100 : 0;
     @endphp
-    <div class="overflow-x-auto pb-2 mb-6">
-        <div class="financial-metrics-grid" style="display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 1rem !important; width: 100% !important; min-width: 680px !important;">
+    <div class="mb-6">
+        <div class="financial-metrics-grid">
             {{-- Card 1: Price --}}
             <div class="stat-card rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/20 to-slate-900/60 backdrop-blur-md p-4 sm:p-5" style="display: flex; flex-direction: column; justify-content: space-between; min-width: 0;">
                 <div class="flex items-center justify-between mb-2">
@@ -290,7 +290,7 @@
                                     <div class="flex items-center justify-center gap-1.5">
                                         {{-- Edit Button --}}
                                         <button type="button"
-                                                @click="openEditPayment({{ $payment->id }}, '{{ $payment->amount }}', '{{ $payment->payment_date->format('Y-m-d') }}', '{{ $payment->payment_method }}', '{{ addslashes($payment->notes ?? '') }}')"
+                                                @click="openEditPayment(@js($payment->id), @js($payment->amount), @js($payment->payment_date->format('Y-m-d')), @js($payment->payment_method), @js($payment->notes ?? ''))"
                                                 class="rounded-lg bg-slate-800 p-1.5 text-blue-400 hover:bg-slate-700 hover:text-blue-300 transition-colors"
                                                 title="تعديل الدفعة">
                                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
@@ -381,7 +381,7 @@
                                     <div class="flex items-center justify-center gap-1.5">
                                         {{-- Edit Expense Button --}}
                                         <button type="button"
-                                                @click="openEditExpense({{ $expense->id }}, '{{ $expense->expense_type }}', '{{ $expense->amount }}', '{{ $expense->expense_date->format('Y-m-d') }}', '{{ $expense->payment_method }}', '{{ addslashes($expense->payee_name ?? '') }}', '{{ addslashes($expense->notes ?? '') }}')"
+                                                @click="openEditExpense(@js($expense->id), @js($expense->expense_type), @js($expense->amount), @js($expense->expense_date->format('Y-m-d')), @js($expense->payment_method), @js($expense->payee_name ?? ''), @js($expense->notes ?? ''))"
                                                 class="rounded-lg bg-slate-800 p-1.5 text-blue-400 hover:bg-slate-700 hover:text-blue-300 transition-colors"
                                                 title="تعديل المصروف">
                                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>

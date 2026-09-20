@@ -28,7 +28,7 @@ class ContractPdfGenerator
         });
 
         try {
-            $contractNo = $house->contract_number ?: $house->reference_code ?: ('H-' . $house->id);
+            $contractNo = $this->eHtml($house->contract_number ?: $house->reference_code ?: ('H-' . $house->id));
             $contractDate = $house->contract_date
                 ? $house->contract_date->format('d') . '-' . $house->contract_date->format('m') . '-' . $house->contract_date->format('Y')
                 : now()->format('d-m-Y');
@@ -65,24 +65,24 @@ class ContractPdfGenerator
             $pdf->AddPage();
 
             // ─── Build dynamic fields ───────────────────────────────────────
-            $clientName   = trim((string)($house->buyer_name ?? $house->client_name ?? '')) ?: '---';
-            $nationality  = trim((string)($house->nationality ?? '')) ?: '---';
-            $idNumber     = trim((string)($house->id_number ?? '')) ?: '---';
-            $clientEmail  = trim((string)($house->client_email ?? '')) ?: '---';
-            $clientPhone  = trim((string)($house->phone ?? '')) ?: '---';
+            $clientName   = $this->eHtml(trim((string)($house->buyer_name ?? $house->client_name ?? '')) ?: '---');
+            $nationality  = $this->eHtml(trim((string)($house->nationality ?? '')) ?: '---');
+            $idNumber     = $this->eHtml(trim((string)($house->id_number ?? '')) ?: '---');
+            $clientEmail  = $this->eHtml(trim((string)($house->client_email ?? '')) ?: '---');
+            $clientPhone  = $this->eHtml(trim((string)($house->phone ?? '')) ?: '---');
 
             // Location
-            $areaName     = trim((string)($house->area ?? '')) ?: '---';
-            $villaNo      = trim((string)($house->villa_number ?? '')) ?: '---';
-            $road         = trim((string)($house->road ?? '')) ?: '---';
-            $compound     = trim((string)($house->compound ?? '')) ?: '---';
-            $introNo      = trim((string)($house->intro_number ?? '')) ?: '0000/0000';
-            $docNo        = trim((string)($house->document_number ?? '')) ?: '00000';
+            $areaName     = $this->eHtml(trim((string)($house->area ?? '')) ?: '---');
+            $villaNo      = $this->eHtml(trim((string)($house->villa_number ?? '')) ?: '---');
+            $road         = $this->eHtml(trim((string)($house->road ?? '')) ?: '---');
+            $compound     = $this->eHtml(trim((string)($house->compound ?? '')) ?: '---');
+            $introNo      = $this->eHtml(trim((string)($house->intro_number ?? '')) ?: '0000/0000');
+            $docNo        = $this->eHtml(trim((string)($house->document_number ?? '')) ?: '00000');
             $locationFull = $areaName;
 
             // Price
             $price      = $house->price ? number_format($house->price, 0) : '---';
-            $priceWords = $this->numberToArabicWords((float)($house->price ?? 0));
+            $priceWords = $this->eHtml($this->numberToArabicWords((float)($house->price ?? 0)));
 
             $this->renderContract(
                 $pdf,
@@ -329,7 +329,7 @@ HTML;
         $pdf->SetXY(14, $pdf->GetY() + 1);
         $pdf->SetFont($this->font, 'B', 11);
         $pdf->SetTextColor(0, 0, 0);
-        $pdf->Cell($colW, 6, $clientName, 0, 0, 'C');
+        $pdf->Cell($colW, 6, htmlspecialchars_decode($clientName, ENT_QUOTES), 0, 0, 'C');
         $pdf->Cell($colW, 6, 'جي أي إس للتقييم والتثمين العقاري', 0, 1, 'C');
 
         // Party 1 (Company): Stamp & Signature without any intersecting line
@@ -350,6 +350,11 @@ HTML;
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────
+
+    private function eHtml(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
 
     private function arabicDayName(\DateTimeInterface $date): string
     {

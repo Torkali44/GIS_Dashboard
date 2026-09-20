@@ -1,5 +1,8 @@
 *.log
 .DS_Store
+Thumbs.db
+
+# Secrets — never push
 .env
 .env.*
 .env *
@@ -8,25 +11,44 @@
 .env.production
 .env.local
 .env.staging
-.phpactor.json
-.phpunit.result.cache
-/.fleet
-/.idea
-/.nova
-/.phpunit.cache
-/.vscode
-/.zed
 /auth.json
-/node_modules
-/public/build
-/public/hot
-/public/storage
-/storage/*.key
-/storage/pail
-/vendor
-Homestead.json
-Homestead.yaml
-Thumbs.db
 secrets.txt
 passwords.txt
 *.pem
+*.key
+/storage/*.key
+
+# Local databases
+*.sqlite
+*.sqlite-*
+/database/*.sqlite*
+
+# Deploy / runbooks — keep locally, do not publish
+/DEPLOY.md
+/scripts/
+/.user.ini
+
+# Dependencies & build
+/node_modules
+/vendor
+/public/build
+/public/hot
+/public/storage
+
+# Framework caches & compiled views
+/bootstrap/cache/*.php
+!/bootstrap/cache/.gitignore
+/storage/pail
+/storage/framework/views/*.php
+
+# Tooling
+.phpactor.json
+.phpunit.result.cache
+/.phpunit.cache
+/.fleet
+/.idea
+/.nova
+/.vscode
+/.zed
+Homestead.json
+Homestead.yaml
