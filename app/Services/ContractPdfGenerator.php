@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\PropertyHouse;
+use App\Support\TcpdfFonts;
 use TCPDF;
 use Throwable;
 
@@ -17,6 +18,8 @@ class ContractPdfGenerator
 
     public function renderBinary(PropertyHouse $house): string
     {
+        TcpdfFonts::registerPath();
+
         $prev = ini_get('memory_limit');
         ini_set('memory_limit', '512M');
 

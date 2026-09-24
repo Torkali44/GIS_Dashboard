@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\TcpdfFonts;
 use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -13,7 +14,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Must run before any TCPDF instance is created so SetFont('arialbd')
+        // resolves definitions from resources/fonts instead of vendor.
+        TcpdfFonts::registerPath();
     }
 
     /**
