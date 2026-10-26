@@ -158,18 +158,27 @@ class ContractManagementTest extends TestCase
         // Verify it's a valid ZIP / DOCX file (PK header)
         $this->assertStringStartsWith('PK', $content);
 
-        // Read word/document.xml from the generated docx
+        // Read document + header XML from the generated docx
         $tmp = tempnam(sys_get_temp_dir(), 'test_docx_') . '.docx';
         file_put_contents($tmp, $content);
         $zip = new \ZipArchive;
         $this->assertTrue($zip->open($tmp));
         $docXml = $zip->getFromName('word/document.xml');
+        $headerXml = '';
+        for ($i = 1; $i <= 5; $i++) {
+            $part = $zip->getFromName("word/header{$i}.xml");
+            if (is_string($part) && $part !== '') {
+                $headerXml .= $part;
+            }
+        }
         $zip->close();
         @unlink($tmp);
 
         $this->assertNotEmpty($docXml);
         $this->assertStringContainsString('عقد فحص المبنى', $docXml);
-        $this->assertStringContainsString('GIS-2026-0077', $docXml);
+        // Order number stays in the page header only (removed from body title area).
+        $this->assertStringContainsString('GIS-2026-0077', $headerXml);
+        $this->assertStringNotContainsString('رقم الطلب GIS-2026-0077', $docXml);
         $this->assertStringContainsString('سعيد المعلم', $docXml);
         $this->assertStringContainsString('سعودي', $docXml);
         $this->assertStringContainsString('saeed@example.com', $docXml);

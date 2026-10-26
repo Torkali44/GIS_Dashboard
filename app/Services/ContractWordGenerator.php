@@ -24,7 +24,22 @@ class ContractWordGenerator
     public function __construct()
     {
         $this->stampPath = public_path('images/GIS SIGN.png');
-        $this->logoPath  = public_path('images/company-logo.png');
+        $this->logoPath = $this->resolveLogoPath();
+    }
+
+    private function resolveLogoPath(): string
+    {
+        foreach ([
+            public_path('images/newLog.jpeg'),
+            public_path('images/newLog.jpg'),
+            public_path('images/company-logo.png'),
+        ] as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return public_path('images/company-logo.png');
     }
 
     public function renderBinary(PropertyHouse $house): string
@@ -96,7 +111,6 @@ class ContractWordGenerator
         $fTitle         = ['name' => 'Arial', 'size' => 15.5, 'bold' => true, 'rtl' => true, 'underline' => 'single'];
         $fHeading       = ['name' => 'Arial', 'size' => 12.5, 'bold' => true, 'rtl' => true, 'underline' => 'single'];
         $fBoldUnderline = ['name' => 'Arial', 'size' => 11.5, 'bold' => true, 'rtl' => true, 'underline' => 'single'];
-        $fCenterBold    = ['name' => 'Arial', 'size' => 12,   'bold' => true, 'color' => 'C00000', 'rtl' => true];
         $fFooterEn      = ['name' => 'Arial', 'size' => 8,    'rtl' => false, 'color' => 'C00000'];
         $fFooterAr      = ['name' => 'Arial', 'size' => 8,    'rtl' => true,  'color' => 'C00000'];
         $fFooterCr      = ['name' => 'Arial', 'size' => 7.5,  'rtl' => false, 'color' => '555555'];
@@ -122,8 +136,8 @@ class ContractWordGenerator
         $hLeft = $hTable->addCell(4819);
         if (file_exists($this->logoPath)) {
             $hLeft->addImage($this->logoPath, [
-                'width'         => 80,
-                'height'        => 48,
+                'width'         => 72,
+                'height'        => 62,
                 'alignment'     => Jc::LEFT,
                 'wrappingStyle' => 'inline',
             ]);
@@ -144,16 +158,9 @@ class ContractWordGenerator
         $fLeft->addText('36698895 | infogisguif@gmail.com | gis.Bahrain', $fSmall, $ltrLeft);
         $fLeft->addText('Seef District - Kingdom of Bahrain', ['name' => 'Arial', 'size' => 7.5, 'color' => 'C00000', 'rtl' => false], $ltrLeft);
 
-        // Cell 2 (Right): Stamp image right above company text
+        // Cell 2 (Right): company text only — stamp stays on the signature block
+        // so the last page does not show the seal twice.
         $fRight = $fTable->addCell(4819);
-        if (file_exists($this->stampPath)) {
-            $fRight->addImage($this->stampPath, [
-                'width'         => 85,
-                'height'        => 65,
-                'alignment'     => Jc::RIGHT,
-                'wrappingStyle' => 'inline',
-            ]);
-        }
         $fRight->addText('GIS VALUATION AND EVALUATION', $fFooterEn, ['alignment' => Jc::RIGHT, 'bidi' => false, 'spaceAfter' => 10]);
         $fRight->addText('جي إي إس للتقييم والتثمين العقاري', $fFooterAr, $rtlRight);
         $fRight->addText('C.R. 160528-1', $fFooterCr, ['alignment' => Jc::RIGHT, 'bidi' => false, 'spaceAfter' => 10]);
@@ -161,7 +168,6 @@ class ContractWordGenerator
         // ═════════════════════════════════════════════════════════════════════
         // PAGE 1: Title, Date, Parties, Inspection Clause 1, Preamble
         // ═════════════════════════════════════════════════════════════════════
-        $section->addText("رقم الطلب {$contractNo}", $fCenterBold, $pCenter);
         $section->addText('عقد فحص المبنى', $fTitle, $pCenter);
         $section->addTextBreak(1);
 

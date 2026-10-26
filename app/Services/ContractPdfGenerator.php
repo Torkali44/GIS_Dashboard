@@ -148,8 +148,6 @@ class ContractPdfGenerator
         $html1 = <<<HTML
 <div dir="rtl" style="font-family:arialbd; font-size:11.5pt; text-align:right; line-height:1.58; color:#000000;">
 
-<p style="text-align:center; font-size:12pt; font-weight:bold; color:#C00000; margin-bottom:4px;">رقم الطلب {$contractNo}</p>
-
 <h2 style="text-align:center; font-size:15.5pt; font-weight:bold; text-decoration:underline; color:#000; margin-top:2px; margin-bottom:8px;">عقد فحص المبنى</h2>
 
 <p>تحرر هذه الاتفاقية في المنامة بمملكة البحرين بتاريخ : <b>{$contractDate}</b></p>
@@ -296,6 +294,10 @@ HTML;
         // PAGE 6: Clause 10 (Items 2 & 3), Clause 11, Clause 12 & Signature Block
         // ═════════════════════════════════════════════════════════════════════
         $pdf->AddPage();
+        // Avoid a second stamp on the last page (signature block already has one).
+        if ($pdf instanceof ContractTCPDF) {
+            $pdf->hideFooterStamp = true;
+        }
         $html6 = <<<HTML
 <div dir="rtl" style="font-family:arialbd; font-size:11.5pt; text-align:right; line-height:1.60; color:#000000;">
 
@@ -403,10 +405,16 @@ HTML;
 
     private function resolveLogoPath(): ?string
     {
-        $primary = public_path('images/company-logo.png');
-        if (is_file($primary) && is_readable($primary)) {
-            return $primary;
+        foreach ([
+            public_path('images/newLog.jpeg'),
+            public_path('images/newLog.jpg'),
+            public_path('images/company-logo.png'),
+        ] as $candidate) {
+            if (is_file($candidate) && is_readable($candidate)) {
+                return $candidate;
+            }
         }
+
         return null;
     }
 }
@@ -420,6 +428,7 @@ class ContractTCPDF extends TCPDF
     public string $contractDate = '';
     public ?string $logoPath = null;
     public string $reportFont = 'arialbd';
+    public bool $hideFooterStamp = false;
 
     public function Header()
     {
@@ -428,7 +437,8 @@ class ContractTCPDF extends TCPDF
         // Company Logo on the left
         if ($this->logoPath && is_readable($this->logoPath)) {
             try {
-                $this->Image($this->logoPath, 14, 8, 30, 20, '', '', '', false, 300);
+                // newLog.jpeg is roughly square (icon + GIS wordmark)
+                $this->Image($this->logoPath, 14, 6, 28, 24, '', '', '', false, 300);
             } catch (Throwable $e) {}
         }
 
@@ -481,7 +491,7 @@ class ContractTCPDF extends TCPDF
         $x += $iconSize + 1.0;
         $this->SetFont($this->reportFont, '', 7.5);
         $this->SetXY($x, $rowY);
-        $this->Cell(38, 4.2, 'infogisgulf@gmail.com', 0, 0, 'L');
+        $this->Cell(38, 4.2, 'infogisguif@gmail.com', 0, 0, 'L');
 
         $x = 79.0;
         if (is_file($instagramIcon)) {
@@ -511,16 +521,18 @@ class ContractTCPDF extends TCPDF
         $this->SetFont('helvetica', '', 7);
         $this->Cell($rightW, 3.0, 'C.R. 160528-1', 0, 0, 'R');
 
-        // Official GIS stamp in footer of every page (above the company text on the right)
-        $signPath = public_path('images/GIS SIGN.png');
-        if (is_file($signPath)) {
-            try {
-                $stampW = 32.0;
-                $stampH = 24.0;
-                $stampX = $pageW - 14.0 - 38.0;
-                $stampY = $pageH - 43.0;
-                $this->Image($signPath, $stampX, $stampY, $stampW, $stampH, '', '', '', false, 300);
-            } catch (Throwable $e) {}
+        // Official GIS stamp in footer (skipped on last page — signature block has the stamp)
+        if (! $this->hideFooterStamp) {
+            $signPath = public_path('images/GIS SIGN.png');
+            if (is_file($signPath)) {
+                try {
+                    $stampW = 32.0;
+                    $stampH = 24.0;
+                    $stampX = $pageW - 14.0 - 38.0;
+                    $stampY = $pageH - 43.0;
+                    $this->Image($signPath, $stampX, $stampY, $stampW, $stampH, '', '', '', false, 300);
+                } catch (Throwable $e) {}
+            }
         }
 
         $this->setRTL(true);
